@@ -8,16 +8,30 @@ dotenv.config();
 const app = express();
 
 // Middleware
+const ALLOWED_ORIGINS = [
+  // Local development
+  /^http:\/\/localhost:\d+$/,
+  // Vercel preview & production deployments
+  /^https:\/\/.*\.vercel\.app$/,
+];
+if (process.env.FRONTEND_URL) {
+  ALLOWED_ORIGINS.push(process.env.FRONTEND_URL);
+}
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests from any localhost port (5173, 5174, etc.) and no origin (Postman/curl)
-    if (!origin || origin.startsWith('http://localhost:')) {
+    // Allow no-origin requests (Postman / curl / server-to-server)
+    if (!origin) return callback(null, true);
+    const allowed = ALLOWED_ORIGINS.some((pattern) =>
+      typeof pattern === 'string' ? pattern === origin : pattern.test(origin)
+    );
+    if (allowed) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error(`CORS: origin ${origin} not allowed`));
     }
   },
-  credentials: true
+  credentials: true,
 }));
 app.use(express.json());
 

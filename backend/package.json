@@ -1,0 +1,24 @@
+{
+  "name": "lead-verification-backend",
+  "version": "1.0.0",
+  "description": "SEPC Intel-Sync AI Lead Verification Backend",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "seed": "node seed_admin.js"
+  },
+  "keywords": [],
+  "author": "SEPC Development Team",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.15.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.3.1"
+  }
+}

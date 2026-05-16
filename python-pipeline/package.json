@@ -1,0 +1,12 @@
+{
+  "name": "lead-verification-pipeline",
+  "version": "1.0.0",
+  "description": "Python pipeline bridge for SEPC Intel-Sync AI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

@@ -132,35 +132,50 @@ router.post('/:id/enrich', verifyToken, async (req, res) => {
     const company = await Company.findById(req.params.id);
     if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
 
+    const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:8000/enrich';
+
+    // Fire-and-forget: kick off Railway pipeline without waiting.
+    // Vercel functions have a 10s timeout — enrichment takes 2-5 minutes.
+    // Railway updates MongoDB directly; the client refreshes to see results.
     const oldCeo = company.currentCeo;
     const oldStatus = company.isActive;
 
-    try {
-      console.log(`📡 Triggering enrichment for: ${company.name}`);
-      await axios.post(process.env.PYTHON_API_URL || 'http://localhost:8000/enrich', {
-        name: company.name,
-        websiteUrl: company.websiteUrl,
-        companyId: company._id
-      }, { timeout: 300000 });
+    axios.post(pythonUrl, {
+      name: company.name,
+      websiteUrl: company.websiteUrl,
+      companyId: company._id
+    }, { timeout: 320000 })
+      .then(async () => {
+        try {
+          const updated = await Company.findById(company._id);
+          const Alert = require('../models/Alert');
+          if (updated.currentCeo && oldCeo && updated.currentCeo !== oldCeo) {
+            await Alert.create({ companyName: updated.name, companyId: updated._id, type: 'leadership_change', severity: 'critical', message: `CEO changed from ${oldCeo} to ${updated.currentCeo}` });
+          }
+          if (oldStatus === true && updated.isActive === false) {
+            await Alert.create({ companyName: updated.name, companyId: updated._id, type: 'status_change', severity: 'critical', message: `Status Alert: Company may be closed or dissolved.` });
+          }
+        } catch (alertErr) {
+          console.error('Alert creation failed:', alertErr.message);
+        }
+      })
+      .catch(err => {
+        console.error(`Enrichment pipeline error for ${company.name}:`, err.message);
+      });
 
-      const updated = await Company.findById(req.params.id);
-      const Alert = require('../models/Alert');
+    // Return immediately — Railway is running enrichment in the background
+    res.json({
+      success: true,
+      async: true,
+      message: `Enrichment started for ${company.name}. Data will update in 2–3 minutes — refresh the profile to see results.`,
+      data: company
+    });
 
-      if (updated.currentCeo && oldCeo && updated.currentCeo !== oldCeo) {
-        await Alert.create({ companyName: updated.name, companyId: updated._id, type: 'leadership_change', severity: 'critical', message: `CEO changed from ${oldCeo} to ${updated.currentCeo}` });
-      }
-      if (oldStatus === true && updated.isActive === false) {
-        await Alert.create({ companyName: updated.name, companyId: updated._id, type: 'status_change', severity: 'critical', message: `Status Alert: Company may be closed or dissolved.` });
-      }
-
-      res.json({ success: true, data: updated });
-    } catch (pyError) {
-      res.status(503).json({ success: false, message: 'Enrichment service failed.', error: pyError.message });
-    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 // POST /api/companies/ingest — Admin only: manual paste
 router.post('/ingest', verifyToken, isAdmin, async (req, res) => {

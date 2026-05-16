@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useRef } from 'react';
+import React, { useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCompany } from '../hooks/useCompany';
 import { AuthContext } from '../context/AuthContext';
@@ -53,35 +53,27 @@ const CompanyProfile = () => {
   const { isAdmin } = useContext(AuthContext);
   const { data: company, isLoading, refetch } = useCompany(id);
   const [enriching, setEnriching] = useState(false);
-  const [enrichingAsync, setEnrichingAsync] = useState(false);
-  const pollRef = useRef(null);
-  const enrichedAtRef = useRef(null);
-
-  // Stop polling on unmount
-  useEffect(() => () => clearInterval(pollRef.current), []);
 
   const handleEnrich = async () => {
     setEnriching(true);
     try {
-      await api.post(`/companies/${id}/enrich`, {}, { timeout: 15000 });
-      // Fire-and-forget: backend responded instantly, Railway running in background
-      enrichedAtRef.current = company?.enrichedAt;
-      setEnrichingAsync(true);
-      // Poll every 30s — stop when enrichedAt changes (Railway finished)
-      pollRef.current = setInterval(async () => {
-        try {
-          const fresh = await refetch();
-          const newEnrichedAt = fresh?.enrichedAt ?? company?.enrichedAt;
-          if (newEnrichedAt && newEnrichedAt !== enrichedAtRef.current) {
-            clearInterval(pollRef.current);
-            setEnrichingAsync(false);
-          }
-        } catch (_) {}
-      }, 30000);
-      // Safety: stop polling after 10 minutes no matter what
-      setTimeout(() => { clearInterval(pollRef.current); setEnrichingAsync(false); }, 600000);
+      // Call Railway DIRECTLY — bypasses Vercel's 10s function timeout entirely.
+      // The browser can hold this connection for the full 2-5 minute enrichment.
+      const railwayUrl = import.meta.env.VITE_PIPELINE_URL || 'http://localhost:8000';
+      const axios = (await import('axios')).default;
+      await axios.post(`${railwayUrl}/enrich`, {
+        name: company.name,
+        websiteUrl: company.websiteUrl,
+        companyId: company._id,
+      }, { timeout: 360000 }); // 6-minute browser timeout
+      // Enrichment done — fetch fresh data from backend
+      await refetch();
     } catch (err) {
-      alert('Could not reach enrichment service: ' + (err.response?.data?.message || err.message));
+      // Still refetch — Railway may have partially updated MongoDB
+      await refetch();
+      if (err.code !== 'ECONNABORTED') {
+        console.error('Enrichment error:', err.message);
+      }
     }
     setEnriching(false);
   };
@@ -267,23 +259,14 @@ const CompanyProfile = () => {
                 </p>
               )}
             </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <div className="flex items-start gap-2">
-                <button onClick={handleEnrich} disabled={enriching || enrichingAsync} className="btn-secondary text-sm py-2.5 px-5">
-                  {enriching ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={14} />}
-                  {enriching ? 'Starting...' : enrichingAsync ? 'Running...' : 'Re-Enrich'}
-                </button>
-                <button onClick={downloadPDF} className="btn-primary text-sm py-2.5 px-5">
-                  <Download size={14} /> PDF Report
-                </button>
-              </div>
-              {enrichingAsync && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold animate-pulse"
-                     style={{ background: 'rgba(0,166,224,0.1)', color: '#0077AA', border: '1px solid rgba(0,166,224,0.25)' }}>
-                  <Loader2 size={12} className="animate-spin" />
-                  Enrichment running in background — auto-refreshing every 30s
-                </div>
-              )}
+            <div className="flex items-start gap-2 shrink-0">
+              <button onClick={handleEnrich} disabled={enriching} className="btn-secondary text-sm py-2.5 px-5">
+                {enriching ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={14} />}
+                {enriching ? 'Enriching...' : 'Re-Enrich'}
+              </button>
+              <button onClick={downloadPDF} className="btn-primary text-sm py-2.5 px-5">
+                <Download size={14} /> PDF Report
+              </button>
             </div>
           </div>
 

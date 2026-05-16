@@ -5,16 +5,16 @@ Exposes the enrichment pipeline as an HTTP API for Railway deployment.
 
 import os
 import sys
-import threading
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Add the pipeline directory to path so enrichment modules resolve correctly
 sys.path.insert(0, os.path.dirname(__file__))
 
 app = Flask(__name__)
+CORS(app, origins=["https://intelsync-ai.vercel.app", "http://localhost:5173", "http://localhost:5174"])
 
 
 @app.route("/health", methods=["GET"])

@@ -1,11 +1,8 @@
 [phases.setup]
-nixPkgs = ["python311", "nodejs_20"]
+nixPkgs = ["python311"]
 
 [phases.install]
-cmds = [
-  "pip install -r requirements.txt",
-  "npm install"
-]
+cmds = ["pip install -r requirements.txt"]
 
 [start]
-cmd = "node server.js"
+cmd = "gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 1 --threads 4"

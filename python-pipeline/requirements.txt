@@ -5,3 +5,5 @@ duckduckgo-search
 groq
 google-genai
 python-whois
+flask
+gunicorn

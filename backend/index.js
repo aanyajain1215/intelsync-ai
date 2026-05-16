@@ -50,6 +50,12 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/freshness', freshnessRoutes);
 
+// Health check
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', service: 'IntelSync AI Backend', version: '11.0' });
+});
+
+
 // Error Handling Middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
